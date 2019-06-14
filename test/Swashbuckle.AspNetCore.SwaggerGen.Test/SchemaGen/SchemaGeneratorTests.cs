@@ -16,14 +16,17 @@ namespace Swashbuckle.AspNetCore.SwaggerGen.Test
     public class SchemaGeneratorTests
     {
         [Theory]
-        [InlineData(typeof(object))]
-        [InlineData(typeof(JToken))]
-        [InlineData(typeof(JObject))]
-        public void GenerateSchema_GeneratesDynamicSchema_IfDynamicType(Type type)
+        [InlineData(typeof(object), "object")]
+        [InlineData(typeof(JToken), "object")]
+        [InlineData(typeof(JObject), "object")]
+        [InlineData(typeof(JArray), "array")]
+        public void GenerateSchema_GeneratesDynamicSchema_IfDynamicType(
+            Type type,
+            string expectedType)
         {
             var schema = Subject().GenerateSchema(type, new SchemaRepository());
 
-            Assert.Equal("object", schema.Type);
+            Assert.Equal(expectedType, schema.Type);
             Assert.Empty(schema.Properties);
         }
 
@@ -146,6 +149,7 @@ namespace Swashbuckle.AspNetCore.SwaggerGen.Test
         [Theory]
         [InlineData(typeof(int[]), "integer", "int32")]
         [InlineData(typeof(IEnumerable<string>), "string", null)]
+        [InlineData(typeof(DateTime?[]), "string", "date-time")]
         public void GenerateSchema_GeneratesArraySchema_IfEnumerableType(
             Type type,
             string expectedItemsType,
@@ -519,13 +523,14 @@ namespace Swashbuckle.AspNetCore.SwaggerGen.Test
             Action<SchemaGeneratorOptions> configureOptions = null,
             Action<JsonSerializerSettings> configureSerializer = null)
         {
-            var options = new SchemaGeneratorOptions();
-            configureOptions?.Invoke(options);
 
             var serializerSettings = new JsonSerializerSettings();
             configureSerializer?.Invoke(serializerSettings);
 
-            return new SchemaGenerator(options, serializerSettings);
+            var options = new SchemaGeneratorOptions();
+            configureOptions?.Invoke(options);
+
+            return new SchemaGenerator(serializerSettings, options);
         }
     }
 }

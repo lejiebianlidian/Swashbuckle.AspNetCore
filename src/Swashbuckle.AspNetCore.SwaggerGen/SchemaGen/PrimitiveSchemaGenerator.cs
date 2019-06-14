@@ -14,10 +14,11 @@ namespace Swashbuckle.AspNetCore.SwaggerGen
         private readonly JsonSerializerSettings _serializerSettings;
 
         public PrimitiveSchemaGenerator(
-            SchemaGeneratorOptions options,
-            ISchemaGenerator rootGenerator,
             IContractResolver contractResolver,
-            JsonSerializerSettings serializerSettings) : base(options, rootGenerator, contractResolver)
+            ISchemaGenerator rootGenerator,
+            JsonSerializerSettings serializerSettings,
+            SchemaGeneratorOptions options)
+            : base(contractResolver, rootGenerator, options)
         {
             _serializerSettings = serializerSettings;
         }
@@ -31,11 +32,13 @@ namespace Swashbuckle.AspNetCore.SwaggerGen
         {
             var jsonPrimitiveContract = (JsonPrimitiveContract)ContractResolver.ResolveContract(type);
 
-            var schema = jsonPrimitiveContract.UnderlyingType.IsEnum
-                ? GenerateEnumSchema(jsonPrimitiveContract)
-                : FactoryMethodMap[jsonPrimitiveContract.UnderlyingType]();
+            if (jsonPrimitiveContract.UnderlyingType.IsEnum)
+                return GenerateEnumSchema(jsonPrimitiveContract);
 
-            return schema;
+            if (FactoryMethodMap.ContainsKey(jsonPrimitiveContract.UnderlyingType))
+                return FactoryMethodMap[jsonPrimitiveContract.UnderlyingType]();
+
+            return new OpenApiSchema { Type = "string" };
         }
 
         private OpenApiSchema GenerateEnumSchema(JsonPrimitiveContract jsonPrimitiveContract)
@@ -105,8 +108,8 @@ namespace Swashbuckle.AspNetCore.SwaggerGen
             { typeof(DateTime), () => new OpenApiSchema { Type = "string", Format = "date-time" } },
             { typeof(DateTimeOffset), () => new OpenApiSchema { Type = "string", Format = "date-time" } },
             { typeof(Guid), () => new OpenApiSchema { Type = "string", Format = "uuid" } },
-            { typeof(Uri), () => new OpenApiSchema { Type = "string" } },
-            { typeof(TimeSpan), () => new OpenApiSchema { Type = "string" } },
+            { typeof(Uri), () => new OpenApiSchema { Type = "string", Format = "uri" } },
+            { typeof(TimeSpan), () => new OpenApiSchema { Type = "string", Format = "date-span" } },
         };
     }
 }

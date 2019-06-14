@@ -8,8 +8,11 @@ namespace Swashbuckle.AspNetCore.SwaggerGen
 {
     public class TypeSpecificSchemaGenerator : ChainableSchemaGenerator
     {
-        public TypeSpecificSchemaGenerator(SchemaGeneratorOptions options, ISchemaGenerator rootGenerator, IContractResolver contractResolver)
-            : base(options, rootGenerator, contractResolver)
+        public TypeSpecificSchemaGenerator(
+            IContractResolver contractResolver,
+            ISchemaGenerator rootGenerator,
+            SchemaGeneratorOptions options)
+            : base(contractResolver, rootGenerator, options)
         { }
 
         protected override bool CanGenerateSchemaFor(Type type)
@@ -26,9 +29,10 @@ namespace Swashbuckle.AspNetCore.SwaggerGen
 
         private static Dictionary<Type, Func<OpenApiSchema>> KnownTypeMappings = new Dictionary<Type, Func<OpenApiSchema>>
         {
-            { typeof(object), () => new OpenApiSchema { Type = "object" } },
-            { typeof(JToken), () => new OpenApiSchema { Type = "object" } },
-            { typeof(JObject), () => new OpenApiSchema { Type = "object" } }
+            [ typeof(object) ] = () => new OpenApiSchema { Type = "object" },
+            [ typeof(JToken) ] = () => new OpenApiSchema { Type = "object" },
+            [ typeof(JObject) ] = () => new OpenApiSchema { Type = "object" },
+            [ typeof(JArray) ] = () => new OpenApiSchema { Type = "array", Items = new OpenApiSchema { Type = "object" } }
         };
     }
 }
