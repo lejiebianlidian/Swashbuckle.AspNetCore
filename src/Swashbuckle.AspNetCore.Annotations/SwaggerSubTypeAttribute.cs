@@ -2,7 +2,8 @@
 
 namespace Swashbuckle.AspNetCore.Annotations
 {
-    [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = true)]
+    [Obsolete("Use SwaggerSubTypesAttribute instead")]
+    [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface, AllowMultiple = true)]
     public class SwaggerSubTypeAttribute : Attribute
     {
         public SwaggerSubTypeAttribute(Type subType)

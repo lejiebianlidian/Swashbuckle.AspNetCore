@@ -3,11 +3,13 @@ using System.Reflection;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.Loader;
-using Microsoft.AspNetCore.Hosting;
+using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi.Writers;
-using Microsoft.AspNetCore;
 using Swashbuckle.AspNetCore.Swagger;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore;
+using Microsoft.Extensions.Hosting;
 
 namespace Swashbuckle.AspNetCore.Cli
 {
@@ -30,8 +32,9 @@ namespace Swashbuckle.AspNetCore.Cli
                 c.Argument("swaggerdoc", "name of the swagger doc you want to retrieve, as configured in your startup class");
                 c.Option("--output", "relative path where the Swagger will be output, defaults to stdout");
                 c.Option("--host", "a specific host to include in the Swagger output");
-                c.Option("--basepath", "a specific basePath to inlcude in the Swagger output");
+                c.Option("--basepath", "a specific basePath to include in the Swagger output");
                 c.Option("--serializeasv2", "output Swagger in the V2 format rather than V3", true);
+                c.Option("--yaml", "exports swagger in a yaml format", true);
                 c.OnRun((namedArgs) =>
                 {
                     var depsFile = namedArgs["startupassembly"].Replace(".dll", ".deps.json");
@@ -59,37 +62,43 @@ namespace Swashbuckle.AspNetCore.Cli
                 c.Option("--host", "");
                 c.Option("--basepath", "");
                 c.Option("--serializeasv2", "", true);
+                c.Option("--yaml", "", true);
                 c.OnRun((namedArgs) =>
                 {
                     // 1) Configure host with provided startupassembly
                     var startupAssembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(
                         Path.Combine(Directory.GetCurrentDirectory(), namedArgs["startupassembly"]));
-                    var host = WebHost.CreateDefaultBuilder()
-                        .UseStartup(startupAssembly.FullName)
-                        .Build();
 
-                    // 2) Retrieve Swagger via configured provider
-                    var swaggerProvider = host.Services.GetRequiredService<ISwaggerProvider>();
+                    // 2) Build a service container that's based on the startup assembly
+                    var serviceProvider = GetServiceProvider(startupAssembly);
+
+                    // 3) Retrieve Swagger via configured provider
+                    var swaggerProvider = serviceProvider.GetRequiredService<ISwaggerProvider>();
                     var swagger = swaggerProvider.GetSwagger(
                         namedArgs["swaggerdoc"],
                         namedArgs.ContainsKey("--host") ? namedArgs["--host"] : null,
                         namedArgs.ContainsKey("--basepath") ? namedArgs["--basepath"] : null);
 
-                    // 3) Serialize to specified output location or stdout
+                    // 4) Serialize to specified output location or stdout
                     var outputPath = namedArgs.ContainsKey("--output")
                         ? Path.Combine(Directory.GetCurrentDirectory(), namedArgs["--output"])
                         : null;
 
                     using (var streamWriter = (outputPath != null ? File.CreateText(outputPath) : Console.Out))
                     {
-                        var jsonWriter = new OpenApiJsonWriter(streamWriter);
-                        if (namedArgs.ContainsKey("--serializeasv2"))
-                            swagger.SerializeAsV2(jsonWriter);
+                        IOpenApiWriter writer;
+                        if (namedArgs.ContainsKey("--yaml"))
+                            writer = new OpenApiYamlWriter(streamWriter);
                         else
-                            swagger.SerializeAsV3(jsonWriter);
+                            writer = new OpenApiJsonWriter(streamWriter);
+
+                        if (namedArgs.ContainsKey("--serializeasv2"))
+                            swagger.SerializeAsV2(writer);
+                        else
+                            swagger.SerializeAsV3(writer);
 
                         if (outputPath != null)
-                            Console.WriteLine($"Swagger JSON succesfully written to {outputPath}");
+                            Console.WriteLine($"Swagger JSON/YAML succesfully written to {outputPath}");
                     }
 
                     return 0;
@@ -101,12 +110,60 @@ namespace Swashbuckle.AspNetCore.Cli
 
         private static string EscapePath(string path)
         {
-            if (path.Contains(" "))
+            return path.Contains(" ")
+                ? "\"" + path + "\""
+                : path;
+        }
+
+        private static IServiceProvider GetServiceProvider(Assembly startupAssembly)
+        {
+            if (TryGetCustomHost(startupAssembly, "SwaggerHostFactory", "CreateHost", out IHost host))
             {
-                return "\"" + path + "\"";
+                return host.Services;
             }
 
-            return path;
+            if (TryGetCustomHost(startupAssembly, "SwaggerWebHostFactory", "CreateWebHost", out IWebHost webHost))
+            {
+                return webHost.Services;
+            }
+
+            return WebHost.CreateDefaultBuilder()
+               .UseStartup(startupAssembly.FullName)
+               .Build()
+               .Services;
+        }
+
+        private static bool TryGetCustomHost<THost>(
+            Assembly startupAssembly,
+            string factoryClassName,
+            string factoryMethodName,
+            out THost host)
+        {
+            // Scan the assembly for any types that match the provided naming convention
+            var factoryTypes = startupAssembly.DefinedTypes
+                .Where(t => t.Name == factoryClassName)
+                .ToList();
+
+            if (!factoryTypes.Any())
+            {
+                host = default;
+                return false;
+            }
+
+            if (factoryTypes.Count() > 1)
+                throw new InvalidOperationException($"Multiple {factoryClassName} classes detected");
+
+            var factoryMethod = factoryTypes
+                .Single()
+                .GetMethod(factoryMethodName, BindingFlags.Public | BindingFlags.Static);
+
+            if (factoryMethod == null || factoryMethod.ReturnType != typeof(THost))
+                throw new InvalidOperationException(
+                    $"{factoryClassName} class detected but does not contain a public static method " +
+                    $"called {factoryMethodName} with return type {typeof(THost).Name}");
+
+            host = (THost)factoryMethod.Invoke(null, null);
+            return true;
         }
     }
 }

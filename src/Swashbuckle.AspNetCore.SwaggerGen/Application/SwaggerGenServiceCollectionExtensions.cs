@@ -1,9 +1,9 @@
 ﻿using System;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.ApiDescriptions;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
-using Newtonsoft.Json;
 using Swashbuckle.AspNetCore.Swagger;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
@@ -19,20 +19,21 @@ namespace Microsoft.Extensions.DependencyInjection
             services.Configure<MvcOptions>(c =>
                 c.Conventions.Add(new SwaggerApplicationConvention()));
 
-            // Register generator and it's dependencies
-#if NETCOREAPP3_0
-            services.AddTransient<ISerializerSettingsAccessor, MvcNewtonsoftJsonOptionsAccessor>();
-#else
-            services.AddTransient<ISerializerSettingsAccessor, MvcJsonOptionsAccessor>();
-#endif
-
-            services.AddTransient<ISwaggerProvider, SwaggerGenerator>();
-            services.AddTransient<ISchemaGenerator, SchemaGenerator>();
-
-            // Register custom configurators that assign values from SwaggerGenOptions (i.e. high level config)
-            // to the service-specific options (i.e. lower-level config)
+            // Register custom configurators that takes values from SwaggerGenOptions (i.e. high level config)
+            // and applies them to SwaggerGeneratorOptions and SchemaGeneratorOptoins (i.e. lower-level config)
             services.AddTransient<IConfigureOptions<SwaggerGeneratorOptions>, ConfigureSwaggerGeneratorOptions>();
             services.AddTransient<IConfigureOptions<SchemaGeneratorOptions>, ConfigureSchemaGeneratorOptions>();
+
+            // Register generator and it's dependencies
+            services.TryAddTransient<ISwaggerProvider, SwaggerGenerator>();
+            services.TryAddTransient(s => s.GetRequiredService<IOptions<SwaggerGeneratorOptions>>().Value);
+            services.TryAddTransient<ISchemaGenerator, SchemaGenerator>();
+            services.TryAddTransient(s => s.GetRequiredService<IOptions<SchemaGeneratorOptions>>().Value);
+            services.TryAddTransient<IDataContractResolver>(s =>
+            {
+                var serializerOptions = s.GetJsonSerializerOptions() ?? new JsonSerializerOptions();
+                return new JsonSerializerDataContractResolver(serializerOptions);
+            });
 
             // Used by the <c>dotnet-getdocument</c> tool from the Microsoft.Extensions.ApiDescription.Server package.
             services.TryAddSingleton<IDocumentProvider, DocumentProvider>();
@@ -49,30 +50,13 @@ namespace Microsoft.Extensions.DependencyInjection
             services.Configure(setupAction);
         }
 
+        private static JsonSerializerOptions GetJsonSerializerOptions(this IServiceProvider serviceProvider)
+        {
 #if NETCOREAPP3_0
-        private sealed class MvcNewtonsoftJsonOptionsAccessor : ISerializerSettingsAccessor
-        {
-            private readonly IOptions<MvcNewtonsoftJsonOptions> _options;
-
-            public MvcNewtonsoftJsonOptionsAccessor(IOptions<MvcNewtonsoftJsonOptions> options)
-            {
-                _options = options;
-            }
-
-            public JsonSerializerSettings Value => _options.Value?.SerializerSettings;
-        }
+            return serviceProvider.GetService<IOptions<JsonOptions>>()?.Value?.JsonSerializerOptions;
 #else
-        private sealed class MvcJsonOptionsAccessor : ISerializerSettingsAccessor
-        {
-            private readonly IOptions<MvcJsonOptions> _options;
-
-            public MvcJsonOptionsAccessor(IOptions<MvcJsonOptions> options)
-            {
-                _options = options;
-            }
-
-            public JsonSerializerSettings Value => _options.Value?.SerializerSettings;
-        }
+            return null;
 #endif
+        }
     }
 }

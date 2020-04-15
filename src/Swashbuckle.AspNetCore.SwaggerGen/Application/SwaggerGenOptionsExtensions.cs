@@ -57,6 +57,18 @@ namespace Microsoft.Extensions.DependencyInjection
             swaggerGenOptions.SwaggerGeneratorOptions.ConflictingActionsResolver = resolver;
         }
 
+        [Obsolete("If the serializer is configured for string enums (e.g. StringEnumConverter) Swashbuckle will reflect that automatically")]
+        public static void DescribeAllEnumsAsStrings(this SwaggerGenOptions swaggerGenOptions)
+        {
+            swaggerGenOptions.SchemaGeneratorOptions.DescribeAllEnumsAsStrings = true;
+        }
+
+        [Obsolete("If the serializer is configured for (camel-cased) string enums (e.g. StringEnumConverter) Swashbuckle will reflect that automatically")]
+        public static void DescribeStringEnumsInCamelCase(this SwaggerGenOptions swaggerGenOptions)
+        {
+            swaggerGenOptions.SchemaGeneratorOptions.DescribeStringEnumsInCamelCase = true;
+        }
+
         /// <summary>
         /// Provide a custom strategy for assigning "operationId" to operations
         /// </summary>
@@ -171,30 +183,6 @@ namespace Microsoft.Extensions.DependencyInjection
         }
 
         /// <summary>
-        /// Use the enum names, as opposed to their integer values, when describing enum types
-        /// </summary>
-        public static void DescribeAllEnumsAsStrings(this SwaggerGenOptions swaggerGenOptions)
-        {
-            swaggerGenOptions.SchemaGeneratorOptions.DescribeAllEnumsAsStrings = true;
-        }
-
-        /// <summary>
-        /// If applicable, describe all enum names, regardless of how they appear in code, in camelCase.
-        /// </summary>
-        public static void DescribeStringEnumsInCamelCase(this SwaggerGenOptions swaggerGenOptions)
-        {
-            swaggerGenOptions.SchemaGeneratorOptions.DescribeStringEnumsInCamelCase = true;
-        }
-
-        /// <summary>
-        /// Use referenced schema definitions instead of inline schema's for enum types
-        /// </summary>
-        public static void UseReferencedDefinitionsForEnums(this SwaggerGenOptions swaggerGenOptions)
-        {
-            swaggerGenOptions.SchemaGeneratorOptions.UseReferencedDefinitionsForEnums = true;
-        }
-
-        /// <summary>
         /// Provide a custom strategy for generating the unique Id's that are used to reference object Schema's
         /// </summary>
         /// <param name="swaggerGenOptions"></param>
@@ -221,12 +209,37 @@ namespace Microsoft.Extensions.DependencyInjection
         /// </summary>
         /// <param name="swaggerGenOptions"></param>
         /// <param name="subTypesResolver"></param>
-        public static void GeneratePolymorphicSchemas(this SwaggerGenOptions swaggerGenOptions, Func<Type, IEnumerable<Type>> subTypesResolver = null)
+        /// <param name="discriminatorSelector"></param>
+        public static void GeneratePolymorphicSchemas(
+            this SwaggerGenOptions swaggerGenOptions,
+            Func<Type, IEnumerable<Type>> subTypesResolver = null,
+            Func<Type, string> discriminatorSelector = null)
         {
             swaggerGenOptions.SchemaGeneratorOptions.GeneratePolymorphicSchemas = true;
 
             if (subTypesResolver != null)
                 swaggerGenOptions.SchemaGeneratorOptions.SubTypesResolver = subTypesResolver;
+
+            if (discriminatorSelector != null)
+                swaggerGenOptions.SchemaGeneratorOptions.DiscriminatorSelector = discriminatorSelector;
+        }
+
+        /// <summary>
+        /// Extend reference schemas (using the allOf construct) so that contextual metadata can be applied to all parameter and property schemas
+        /// </summary>
+        /// <param name="swaggerGenOptions"></param>
+        public static void UseAllOfToExtendReferenceSchemas(this SwaggerGenOptions swaggerGenOptions)
+        {
+            swaggerGenOptions.SchemaGeneratorOptions.UseAllOfToExtendReferenceSchemas = true;
+        }
+
+        /// <summary>
+        /// Generate inline schema definitions (as opposed to referencing a shared definition) for enum parameters and properties
+        /// </summary>
+        /// <param name="swaggerGenOptions"></param>
+        public static void UseInlineDefinitionsForEnums(this SwaggerGenOptions swaggerGenOptions)
+        {
+            swaggerGenOptions.SchemaGeneratorOptions.UseInlineDefinitionsForEnums = true;
         }
 
         /// <summary>
@@ -259,6 +272,24 @@ namespace Microsoft.Extensions.DependencyInjection
             where TFilter : IParameterFilter
         {
             swaggerGenOptions.ParameterFilterDescriptors.Add(new FilterDescriptor
+            {
+                Type = typeof(TFilter),
+                Arguments = arguments
+            });
+        }
+
+        /// <summary>
+        /// Extend the Swagger Generator with "filters" that can modify RequestBodys after they're initially generated
+        /// </summary>
+        /// <typeparam name="TFilter">A type that derives from IRequestBodyFilter</typeparam>
+        /// <param name="swaggerGenOptions"></param>
+        /// <param name="arguments">Optionally inject parameters through filter constructors</param>
+        public static void RequestBodyFilter<TFilter>(
+            this SwaggerGenOptions swaggerGenOptions,
+            params object[] arguments)
+            where TFilter : IRequestBodyFilter
+        {
+            swaggerGenOptions.RequestBodyFilterDescriptors.Add(new FilterDescriptor
             {
                 Type = typeof(TFilter),
                 Arguments = arguments
@@ -316,6 +347,8 @@ namespace Microsoft.Extensions.DependencyInjection
             bool includeControllerXmlComments = false)
         {
             var xmlDoc = xmlDocFactory();
+            swaggerGenOptions.ParameterFilter<XmlCommentsParameterFilter>(xmlDoc);
+            swaggerGenOptions.RequestBodyFilter<XmlCommentsRequestBodyFilter>(xmlDoc);
             swaggerGenOptions.OperationFilter<XmlCommentsOperationFilter>(xmlDoc);
             swaggerGenOptions.SchemaFilter<XmlCommentsSchemaFilter>(xmlDoc);
 

@@ -3,13 +3,11 @@
 namespace Swashbuckle.AspNetCore.Annotations
 {
     /// <summary>
-    /// Enriches Parameter metadata for a given top-level parameter
+    /// Enriches Parameter metadata for "path", "query" or "header" bound parameters or properties
     /// </summary>
-    [AttributeUsage(AttributeTargets.Parameter, AllowMultiple = false)]
+    [AttributeUsage(AttributeTargets.Parameter | AttributeTargets.Property, AllowMultiple = false)]
     public class SwaggerParameterAttribute : Attribute
     {
-        private bool _required;
-
         public SwaggerParameterAttribute(string description = null)
         {
             Description = description;
@@ -22,19 +20,15 @@ namespace Swashbuckle.AspNetCore.Annotations
         public string Description { get;  set; }
 
         /// <summary>
-        /// Determines whether this parameter is mandatory. If the parameter is in "path",
+        /// Determines whether the parameter is mandatory. If the parameter is in "path",
         /// it will be required by default as Swagger does not allow optional path parameters
         /// </summary>
         public bool Required
         {
-            get { return _required; }
-            set
-            {
-                RequiredProvided = true;
-                _required = value;
-            }
+            get { throw new InvalidOperationException($"Use {nameof(RequiredFlag)} instead"); }
+            set { RequiredFlag = value; }
         }
 
-        internal bool RequiredProvided { get; set; }
+        internal bool? RequiredFlag { get; set; }
     }
 }

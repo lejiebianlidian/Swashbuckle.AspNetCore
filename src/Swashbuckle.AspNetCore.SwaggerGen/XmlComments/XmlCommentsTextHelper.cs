@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using System.Net;
 using System.Text.RegularExpressions;
 
 namespace Swashbuckle.AspNetCore.SwaggerGen
@@ -8,16 +9,21 @@ namespace Swashbuckle.AspNetCore.SwaggerGen
     {
         private static Regex RefTagPattern = new Regex(@"<(see|paramref) (name|cref)=""([TPF]{1}:)?(?<display>.+?)"" ?/>");
         private static Regex CodeTagPattern = new Regex(@"<c>(?<display>.+?)</c>");
+        private static Regex ParaTagPattern = new Regex(@"<para>(?<display>.+?)</para>", RegexOptions.Singleline);
 
         public static string Humanize(string text)
         {
             if (text == null)
                 throw new ArgumentNullException("text");
 
+            //Call DecodeXml at last to avoid entities like &lt and &gt to break valid xml          
+
             return text
                 .NormalizeIndentation()
                 .HumanizeRefTags()
-                .HumanizeCodeTags();
+                .HumanizeCodeTags()
+                .HumanizeParaTags()
+                .DecodeXml();
         }
 
         private static string NormalizeIndentation(this string text)
@@ -87,6 +93,16 @@ namespace Swashbuckle.AspNetCore.SwaggerGen
         private static string HumanizeCodeTags(this string text)
         {
             return CodeTagPattern.Replace(text, (match) => "{" + match.Groups["display"].Value + "}");
+        }
+
+        private static string HumanizeParaTags(this string text)
+        {
+            return ParaTagPattern.Replace(text, (match) => "<br>" + match.Groups["display"].Value);
+        }
+
+        private static string DecodeXml(this string text)
+        {
+            return WebUtility.HtmlDecode(text);
         }
 
     }

@@ -1,10 +1,10 @@
-﻿using System.IO;
+﻿using System.Globalization;
+using System.IO;
 using System.Text;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Routing.Template;
-using Microsoft.AspNetCore.Http;
 using Microsoft.OpenApi.Models;
 using Microsoft.OpenApi.Writers;
 
@@ -18,17 +18,11 @@ namespace Swashbuckle.AspNetCore.Swagger
 
         public SwaggerMiddleware(
             RequestDelegate next,
-            IOptions<SwaggerOptions> optionsAccessor)
-            : this(next, optionsAccessor.Value)
-        { }
-
-        public SwaggerMiddleware(
-            RequestDelegate next,
             SwaggerOptions options)
         {
             _next = next;
             _options = options ?? new SwaggerOptions();
-            _requestMatcher = new TemplateMatcher(TemplateParser.Parse(options.RouteTemplate), new RouteValueDictionary());
+            _requestMatcher = new TemplateMatcher(TemplateParser.Parse(_options.RouteTemplate), new RouteValueDictionary());
         }
 
         public async Task Invoke(HttpContext httpContext, ISwaggerProvider swaggerProvider)
@@ -83,7 +77,7 @@ namespace Swashbuckle.AspNetCore.Swagger
             response.StatusCode = 200;
             response.ContentType = "application/json;charset=utf-8";
 
-            using (var textWriter = new StringWriter())
+            using (var textWriter = new StringWriter(CultureInfo.InvariantCulture))
             {
                 var jsonWriter = new OpenApiJsonWriter(textWriter);
                 if (_options.SerializeAsV2) swagger.SerializeAsV2(jsonWriter); else swagger.SerializeAsV3(jsonWriter);

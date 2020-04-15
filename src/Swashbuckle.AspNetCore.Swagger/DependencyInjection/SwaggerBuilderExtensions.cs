@@ -1,4 +1,6 @@
 ﻿using System;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Swashbuckle.AspNetCore.Swagger;
 
 namespace Microsoft.AspNetCore.Builder
@@ -9,19 +11,17 @@ namespace Microsoft.AspNetCore.Builder
             this IApplicationBuilder app,
             Action<SwaggerOptions> setupAction = null)
         {
-            if (setupAction == null)
+            SwaggerOptions options = new SwaggerOptions();
+            if (setupAction != null)
             {
-                // Don't pass options so it can be configured/injected via DI container instead
-                app.UseMiddleware<SwaggerMiddleware>();
+                setupAction(options);
             }
             else
             {
-                // Configure an options instance here and pass directly to the middleware
-                var options = new SwaggerOptions();
-                setupAction.Invoke(options);
-
-                app.UseMiddleware<SwaggerMiddleware>(options);
+                options = app.ApplicationServices.GetRequiredService<IOptions<SwaggerOptions>>().Value;
             }
+
+            app.UseMiddleware<SwaggerMiddleware>(options);
 
             return app;
         }

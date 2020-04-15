@@ -1,19 +1,15 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Globalization;
 using System.Xml.XPath;
 using System.Reflection;
 using Microsoft.OpenApi.Any;
-using Newtonsoft.Json.Serialization;
 using Microsoft.OpenApi.Models;
 
 namespace Swashbuckle.AspNetCore.SwaggerGen
 {
     public class XmlCommentsSchemaFilter : ISchemaFilter
     {
-        private const string MemberXPath = "/doc/members/member[@name='{0}']";
-        private const string SummaryTag = "summary";
-        private const string ExampleXPath = "example";
-
         private readonly XPathNavigator _xmlNavigator;
 
         public XmlCommentsSchemaFilter(XPathDocument xmlDoc)
@@ -23,53 +19,67 @@ namespace Swashbuckle.AspNetCore.SwaggerGen
 
         public void Apply(OpenApiSchema schema, SchemaFilterContext context)
         {
-            var jsonObjectContract = context.JsonContract as JsonObjectContract;
-            if (jsonObjectContract == null) return;
+            ApplyTypeTags(schema, context.Type);
 
-            var memberName = XmlCommentsMemberNameHelper.GetMemberNameForType(context.Type);
-            var typeNode = _xmlNavigator.SelectSingleNode(string.Format(MemberXPath, memberName));
-
-            if (typeNode != null)
+            if (context.MemberInfo != null)
             {
-                var summaryNode = typeNode.SelectSingleNode(SummaryTag);
-                if (summaryNode != null)
-                    schema.Description = XmlCommentsTextHelper.Humanize(summaryNode.InnerXml);
+                ApplyFieldOrPropertyTags(schema, context.MemberInfo);
             }
-
-            if (schema.Properties == null) return;
-            foreach (var entry in schema.Properties)
+            else if (context.ParameterInfo != null)
             {
-                if (!jsonObjectContract.Properties.Contains(entry.Key))
-                {
-                    continue;
-                }
-                var jsonProperty = jsonObjectContract.Properties[entry.Key];
+                ApplyParamTags(schema, context.ParameterInfo);
+            }
+        }
 
-                if (jsonProperty.TryGetMemberInfo(out MemberInfo memberInfo))
+        private void ApplyTypeTags(OpenApiSchema schema, Type type)
+        {
+            var typeMemberName = XmlCommentsNodeNameHelper.GetMemberNameForType(type);
+            var typeSummaryNode = _xmlNavigator.SelectSingleNode($"/doc/members/member[@name='{typeMemberName}']/summary");
+
+            if (typeSummaryNode != null)
+            {
+                schema.Description = XmlCommentsTextHelper.Humanize(typeSummaryNode.InnerXml);
+            }
+        }
+
+        private void ApplyFieldOrPropertyTags(OpenApiSchema schema, MemberInfo fieldOrPropertyInfo)
+        {
+            var fieldOrPropertyMemberName = XmlCommentsNodeNameHelper.GetMemberNameForFieldOrProperty(fieldOrPropertyInfo);
+            var fieldOrPropertyNode = _xmlNavigator.SelectSingleNode($"/doc/members/member[@name='{fieldOrPropertyMemberName}']");
+
+            if (fieldOrPropertyNode == null) return;
+
+            var summaryNode = fieldOrPropertyNode.SelectSingleNode("summary");
+            if (summaryNode != null)
+                schema.Description = XmlCommentsTextHelper.Humanize(summaryNode.InnerXml);
+
+            var exampleNode = fieldOrPropertyNode.SelectSingleNode("example");
+            if (exampleNode != null)
+            {
+                var exampleString = XmlCommentsTextHelper.Humanize(exampleNode.InnerXml);
+
+                if (fieldOrPropertyInfo is FieldInfo fieldInfo)
                 {
-                    ApplyPropertyComments(entry.Value, memberInfo);
+                    schema.Example = ConvertToOpenApiType(fieldInfo.FieldType, schema, exampleString);
+                }
+                else if (fieldOrPropertyInfo is PropertyInfo propertyInfo)
+                {
+                    schema.Example = ConvertToOpenApiType(propertyInfo.PropertyType, schema, exampleString);
                 }
             }
         }
 
-        private void ApplyPropertyComments(OpenApiSchema propertySchema, MemberInfo memberInfo)
+        private void ApplyParamTags(OpenApiSchema schema, ParameterInfo parameterInfo)
         {
-            var memberName = XmlCommentsMemberNameHelper.GetMemberNameForMember(memberInfo);
-            var memberNode = _xmlNavigator.SelectSingleNode(string.Format(MemberXPath, memberName));
-            if (memberNode == null) return;
+            if (!(parameterInfo.Member is MethodInfo methodInfo)) return;
 
-            var summaryNode = memberNode.SelectSingleNode(SummaryTag);
-            if (summaryNode != null)
-            {
-                propertySchema.Description = XmlCommentsTextHelper.Humanize(summaryNode.InnerXml);
-            }
+            var methodMemberName = XmlCommentsNodeNameHelper.GetMemberNameForMethod(methodInfo);
+            var paramNode = _xmlNavigator.SelectSingleNode(
+                $"/doc/members/member[@name='{methodMemberName}']/param[@name='{parameterInfo.Name}']");
 
-            var exampleNode = memberNode.SelectSingleNode(ExampleXPath);
-            if (exampleNode != null)
+            if (paramNode != null)
             {
-                var exampleString = XmlCommentsTextHelper.Humanize(exampleNode.InnerXml);
-                var memberType = (memberInfo.MemberType & MemberTypes.Field) != 0 ? ((FieldInfo) memberInfo).FieldType : ((PropertyInfo) memberInfo).PropertyType;
-                propertySchema.Example = ConvertToOpenApiType(memberType, propertySchema, exampleString);
+                schema.Description = XmlCommentsTextHelper.Humanize(paramNode.InnerXml);
             }
         }
 
@@ -79,16 +89,17 @@ namespace Swashbuckle.AspNetCore.SwaggerGen
 
             try
             {
-                typedValue = TypeDescriptor.GetConverter(memberType).ConvertFrom(stringValue);
+                typedValue = TypeDescriptor.GetConverter(memberType).ConvertFrom(
+                    context: null,
+                    culture: CultureInfo.InvariantCulture,
+                    stringValue);
             }
             catch (Exception)
             {
                 return null;
             }
 
-            return OpenApiAnyFactory.TryCreateFor(schema, typedValue, out IOpenApiAny openApiAny)
-                ? openApiAny
-                : null;
+            return OpenApiAnyFactory.CreateFor(schema, typedValue);
         }
     }
 }

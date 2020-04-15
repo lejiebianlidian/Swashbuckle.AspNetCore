@@ -2,7 +2,6 @@
 using System.Text;
 using System.Linq;
 using System.Collections.Generic;
-using Newtonsoft.Json.Linq;
 using Swashbuckle.AspNetCore.SwaggerUI;
 
 namespace Microsoft.AspNetCore.Builder
@@ -233,7 +232,7 @@ namespace Microsoft.AspNetCore.Builder
         /// <param name="value"></param>
         public static void OAuthScopeSeparator(this SwaggerUIOptions options, string value)
         {
-            options.OAuthConfigObject.ScopeSeperator = value;
+            options.OAuthConfigObject.ScopeSeparator = value;
         }
 
         /// <summary>
@@ -257,6 +256,15 @@ namespace Microsoft.AspNetCore.Builder
         public static void OAuthUseBasicAuthenticationWithAccessCodeGrant(this SwaggerUIOptions options)
         {
             options.OAuthConfigObject.UseBasicAuthenticationWithAccessCodeGrant = true;
+        }
+
+        /// <summary>
+        /// Only applies to authorizatonCode flows. Proof Key for Code Exchange brings enhanced security for OAuth public clients.
+        /// The default is false
+        /// <param name="options"></param>
+        public static void OAuthUsePkce(this SwaggerUIOptions options)
+        {
+            options.OAuthConfigObject.UsePkceWithAuthorizationCodeGrant = true;
         }
     }
 }

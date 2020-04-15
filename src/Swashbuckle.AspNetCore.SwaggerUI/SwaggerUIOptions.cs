@@ -3,8 +3,7 @@ using System.IO;
 using System.Reflection;
 using System.Collections.Generic;
 using System.Linq;
-using Newtonsoft.Json.Linq;
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace Swashbuckle.AspNetCore.SwaggerUI
 {
@@ -111,14 +110,13 @@ namespace Swashbuckle.AspNetCore.SwaggerUI
         /// <summary>
         /// OAuth redirect URL
         /// </summary>
-        [JsonProperty("oauth2RedirectUrl")]
+        [JsonPropertyName("oauth2RedirectUrl")]
         public string OAuth2RedirectUrl { get; set; } = null;
 
         /// <summary>
         /// List of HTTP methods that have the Try it out feature enabled.
         /// An empty array disables Try it out for all operations. This does not filter the operations from the display
         /// </summary>
-        [JsonProperty(NullValueHandling = NullValueHandling.Include)]
         public IEnumerable<SubmitMethod> SupportedSubmitMethods { get; set; } = Enum.GetValues(typeof(SubmitMethod)).Cast<SubmitMethod>();
 
         /// <summary>
@@ -126,11 +124,10 @@ namespace Swashbuckle.AspNetCore.SwaggerUI
         /// You can use this parameter to set a different validator URL, for example for locally deployed validators (Validator Badge).
         /// Setting it to null will disable validation
         /// </summary>
-        [JsonProperty(NullValueHandling = NullValueHandling.Include)]
         public string ValidatorUrl { get; set; } = null;
 
         [JsonExtensionData]
-        public Dictionary<string, object> AdditionalItems = new Dictionary<string, object>();
+        public Dictionary<string, object> AdditionalItems { get; set; } = new Dictionary<string, object>();
     }
 
     public class UrlDescriptor
@@ -190,7 +187,7 @@ namespace Swashbuckle.AspNetCore.SwaggerUI
         /// <summary>
         /// Scope separator for passing scopes, encoded before calling, default value is a space (encoded value %20)
         /// </summary>
-        public string ScopeSeperator { get; set; } = " ";
+        public string ScopeSeparator { get; set; } = " ";
 
         /// <summary>
         /// Additional query parameters added to authorizationUrl and tokenUrl
@@ -203,5 +200,11 @@ namespace Swashbuckle.AspNetCore.SwaggerUI
         /// (Authorization header with Basic base64encode(client_id + client_secret))
         /// </summary>
         public bool UseBasicAuthenticationWithAccessCodeGrant { get; set; } = false;
+
+        /// <summary>
+        /// Only applies to authorizatonCode flows. Proof Key for Code Exchange brings enhanced security for OAuth public clients.
+        /// The default is false
+        /// </summary>
+        public bool UsePkceWithAuthorizationCodeGrant { get; set; } = false;
     }
 }
