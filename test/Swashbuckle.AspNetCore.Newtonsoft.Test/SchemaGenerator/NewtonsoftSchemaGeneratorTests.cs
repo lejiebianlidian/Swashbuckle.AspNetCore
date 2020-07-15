@@ -178,6 +178,7 @@ namespace Swashbuckle.AspNetCore.Newtonsoft.Test
 
             Assert.Equal("object", schema.Type);
             Assert.Empty(schema.Properties);
+            Assert.False(schema.AdditionalPropertiesAllowed);
         }
 
         [Theory]
@@ -199,6 +200,7 @@ namespace Swashbuckle.AspNetCore.Newtonsoft.Test
             var schema = schemaRepository.Schemas[expectedSchemaId];
             Assert.Equal("object", schema.Type);
             Assert.Equal(expectedProperties, schema.Properties.Keys);
+            Assert.False(schema.AdditionalPropertiesAllowed);
         }
 
         [Fact]
@@ -588,6 +590,18 @@ namespace Swashbuckle.AspNetCore.Newtonsoft.Test
         }
 
         [Fact]
+        public void GenerateSchema_HonorsSerializerAttribute_JsonRequired()
+        {
+            var schemaRepository = new SchemaRepository();
+
+            var referenceSchema = Subject().GenerateSchema(typeof(JsonRequiredAnnotatedType), schemaRepository);
+
+            var schema = schemaRepository.Schemas[referenceSchema.Reference.Id];
+            Assert.Equal(new[] { "StringWithJsonRequired" }, schema.Required.ToArray());
+            Assert.False(schema.Properties["StringWithJsonRequired"].Nullable);
+        }
+
+        [Fact]
         public void GenerateSchema_HonorsSerializerAttribute_JsonObject()
         {
             var schemaRepository = new SchemaRepository();
@@ -626,6 +640,7 @@ namespace Swashbuckle.AspNetCore.Newtonsoft.Test
         {
             var schema = Subject().GenerateSchema(typeof(JToken), new SchemaRepository());
 
+            Assert.Null(schema.Reference);
             Assert.Null(schema.Type);
         }
 

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using Microsoft.AspNetCore.Http;
@@ -143,7 +144,8 @@ namespace Swashbuckle.AspNetCore.SwaggerGen
             {
                 Type = "object",
                 Properties = new Dictionary<string, OpenApiSchema>(),
-                Required = new SortedSet<string>()
+                Required = new SortedSet<string>(),
+                AdditionalPropertiesAllowed = false
             };
 
             // If it's a baseType with known subTypes, add the discriminator property
@@ -173,6 +175,7 @@ namespace Swashbuckle.AspNetCore.SwaggerGen
 
             if (dataContract.AdditionalPropertiesType != null)
             {
+                schema.AdditionalPropertiesAllowed = true;
                 schema.AdditionalProperties = GenerateSchema(dataContract.AdditionalPropertiesType, schemaRepository);
             }
 
@@ -235,13 +238,14 @@ namespace Swashbuckle.AspNetCore.SwaggerGen
         {
             var schema = new OpenApiSchema
             {
-                Type = dataContract.DataType.ToString().ToLower(),
+                Type = dataContract.DataType.ToString().ToLower(CultureInfo.InvariantCulture),
                 Format = dataContract.Format
             };
 
             if (dataContract.EnumValues != null)
             {
                 schema.Enum = dataContract.EnumValues
+                    .Distinct()
                     .Select(value => OpenApiAnyFactory.CreateFor(schema, value))
                     .ToList();
             }

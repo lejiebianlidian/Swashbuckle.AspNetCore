@@ -21,8 +21,8 @@ Once you have an API that can describe itself in Swagger, you've opened the trea
 
 |Swashbuckle Version|ASP.NET Core|Swagger / OpenAPI Spec.|swagger-ui|ReDoc UI|
 |----------|----------|----------|----------|----------|
-|[master](https://github.com/domaindrivendev/Swashbuckle.AspNetCore/tree/master/README.md)|>= 2.0.0|2.0, 3.0|3.25.0|2.0.0-rc.23|
-|[5.3.1](https://github.com/domaindrivendev/Swashbuckle.AspNetCore/tree/v5.3.1)|>= 2.0.0|2.0, 3.0|3.25.0|2.0.0-rc.23|
+|[master](https://github.com/domaindrivendev/Swashbuckle.AspNetCore/tree/master/README.md)|>= 2.0.0|2.0, 3.0|3.26.0|2.0.0-rc.23|
+|[5.5.0](https://github.com/domaindrivendev/Swashbuckle.AspNetCore/tree/v5.5.0)|>= 2.0.0|2.0, 3.0|3.26.0|2.0.0-rc.23|
 |[4.0.0](https://github.com/domaindrivendev/Swashbuckle.AspNetCore/tree/v4.0.0)|>= 2.0.0, < 3.0.0|2.0|3.19.5|1.22.2|
 |[3.0.0](https://github.com/domaindrivendev/Swashbuckle.AspNetCore/tree/v3.0.0)|>= 1.0.4, < 3.0.0|2.0|3.17.1|1.20.0|
 |[2.5.0](https://github.com/domaindrivendev/Swashbuckle.AspNetCore/tree/v2.5.0)|>= 1.0.4, < 3.0.0|2.0|3.16.0|1.20.0|
@@ -32,8 +32,8 @@ Once you have an API that can describe itself in Swagger, you've opened the trea
 1. Install the standard Nuget package into your ASP.NET Core application.
 
     ```
-    Package Manager : Install-Package Swashbuckle.AspNetCore -Version 5.3.1
-    CLI : dotnet add package --version 5.3.1 Swashbuckle.AspNetCore
+    Package Manager : Install-Package Swashbuckle.AspNetCore -Version 5.5.0
+    CLI : dotnet add package --version 5.5.0 Swashbuckle.AspNetCore
     ```
 
 2. In the `ConfigureServices` method of `Startup.cs`, register the Swagger generator, defining one or more Swagger documents.
@@ -97,8 +97,8 @@ If you're using **System.Text.Json (STJ)**, then the setup described above will 
 If you're using **Newtonsoft**, then you'll need to install a separate package and explicitly opt-in to ensure that *Newtonsoft* settings/attributes are automatically honored by the Swagger generator:
 
 ```
-Package Manager : Install-Package Swashbuckle.AspNetCore.Newtonsoft -Version 5.3.1
-CLI : dotnet add package --version 5.3.1 Swashbuckle.AspNetCore.Newtonsoft
+Package Manager : Install-Package Swashbuckle.AspNetCore.Newtonsoft -Version 5.5.0
+CLI : dotnet add package --version 5.5.0 Swashbuckle.AspNetCore.Newtonsoft
 ```
 
 ```csharp
@@ -460,13 +460,14 @@ To enhance the generated docs with human-friendly descriptions, you can annotate
     }
     ```
 
-3. Annotate your actions with summary, remarks and response tags:
+3. Annotate your actions with summary, remarks, param and response tags:
 
     ```csharp
     /// <summary>
     /// Retrieves a specific product by unique id
     /// </summary>
     /// <remarks>Awesomeness!</remarks>
+    /// <param name="id" example="123">The product id</param>
     /// <response code="200">Product created</response>
     /// <response code="400">Product has missing/invalid values</response>
     /// <response code="500">Oops! Can't create your product right now</response>
@@ -984,6 +985,7 @@ app.UseSwaggerUI(c =>
     c.EnableFilter();
     c.MaxDisplayedTags(5);
     c.ShowExtensions();
+    c.ShowCommonExtensions();
     c.EnableValidator();
     c.SupportedSubmitMethods(SubmitMethod.Get, SubmitMethod.Head);
 });
@@ -1128,7 +1130,7 @@ public class Product
 }
 ```
 
-_NOTE: In Swagger/OpenAPI, serialized objects AND contained properties are represented as `Schema` instances, hence why this annotation can be applied to both classes and properties. Also worth noting, "required" properties are specified as an array of property names on the top-level schema as opposed to a flag on each individual property._
+_NOTE: In Swagger / OpenAPI, serialized objects AND contained properties are represented as `Schema` instances, hence why this annotation can be applied to both classes and properties. Also worth noting, "required" properties are specified as an array of property names on the top-level schema as opposed to a flag on each individual property._
 
 ### Apply Schema Filters to Specific Types ###
 
@@ -1174,9 +1176,38 @@ _NOTE: This will add the above description specifically to the tag named "Produc
 
 ### Retrieve Swagger Directly from a Startup Assembly ###
 
-Once your application has been configured to generate and expose Swagger/OpenAPI JSON (see [Getting Started](#getting-started)), the Swashbuckle CLI tool can retrieve Swagger/OpenAPI JSON directly from your application's startup assembly, and write it to file. This can be useful if you want to incorporate Swagger generation into a CI/CD process, or if you want to serve it from static file at run-time.
+Once your application has been setup with Swashbuckle (see [Getting Started](#getting-started)), you can use the Swashbuckle CLI tool to retrieve Swagger / OpenAPI JSON directly from your application's startup assembly, and write it to file. This can be useful if you want to incorporate Swagger generation into a CI/CD process, or if you want to serve it from static file at run-time.
 
-It can be installed as a [.NET Core Global Tool](https://docs.microsoft.com/en-us/dotnet/core/tools/global-tools). To install and use it locally (i.e. for the current directory), follow these steps:
+It's packaged as a [.NET Core Tool](https://docs.microsoft.com/en-us/dotnet/core/tools/global-tools) that can be installed and used via the dotnet SDK.
+
+> :warning: The tool needs to load your Startup DLL and it's dependencies at runtime. Therefore, you should use a version of the `dotnet` SDK that is compatible with your application. For example, if your app targets `netcoreapp2.1`, then you should use version 2.1 of the SDK to run the CLI tool. If it targetes `netcoreapp3.0`, then you should use version 3.0 of the SDK and so on.
+
+#### Using the tool with the .NET Core 2.1 SDK
+
+1. Install as a [global tool](https://docs.microsoft.com/en-us/dotnet/core/tools/global-tools#install-a-global-tool)
+
+    ```
+    dotnet tool install -g --version 5.5.0 Swashbuckle.AspNetCore.Cli
+    ```
+
+2. Verify that the tool was installed correctly
+
+    ```
+    swagger tofile --help
+    ```
+
+3. Generate a Swagger/ OpenAPI document from your application's startup assembly
+
+	```
+	swagger tofile --output [output] [startupassembly] [swaggerdoc]
+	```
+
+	Where ...
+	* [output] is the relative path where the Swagger JSON will be output to
+	* [startupassembly] is the relative path to your application's startup assembly
+	* [swaggerdoc] is the name of the swagger document you want to retrieve, as configured in your startup class
+
+#### Using the tool with the .NET Core 3.0 SDK or later
 
 1. In your project root, create a tool manifest file:
 
@@ -1184,10 +1215,10 @@ It can be installed as a [.NET Core Global Tool](https://docs.microsoft.com/en-u
     dotnet new tool-manifest
     ```
 
-2. Install the Swashbuckle CLI tool and add it to the local manifest file
+2. Install as a [local tool](https://docs.microsoft.com/en-us/dotnet/core/tools/global-tools#install-a-local-tool)
 
     ```
-    dotnet tool install --version 5.3.1 Swashbuckle.AspNetCore.Cli
+    dotnet tool install --version 5.5.0 Swashbuckle.AspNetCore.Cli
     ```
 
 3. Verify that the tool was installed correctly
@@ -1196,7 +1227,7 @@ It can be installed as a [.NET Core Global Tool](https://docs.microsoft.com/en-u
     dotnet swagger tofile --help
     ```
 
-4. Generate a Swagger/OpenAPI document from your application's startup assembly
+4. Generate a Swagger / OpenAPI document from your application's startup assembly
 
 	```
 	dotnet swagger tofile --output [output] [startupassembly] [swaggerdoc]
@@ -1206,8 +1237,6 @@ It can be installed as a [.NET Core Global Tool](https://docs.microsoft.com/en-u
 	* [output] is the relative path where the Swagger JSON will be output to
 	* [startupassembly] is the relative path to your application's startup assembly
 	* [swaggerdoc] is the name of the swagger document you want to retrieve, as configured in your startup class
-
-_NOTE: At this point the tool will be added to the local manifest file and installed. Once the updated manifest file is present, the tool can be automatically installed on a fresh envrionment (e.g. a CI/CD runner) by running `dotnet tool restore`._
 
 ### Use the CLI Tool with a Custom Host Configuration
 

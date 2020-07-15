@@ -11,6 +11,7 @@ using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
 using Xunit;
 using Swashbuckle.AspNetCore.TestSupport;
+using System.Net;
 
 namespace Swashbuckle.AspNetCore.SwaggerGen.Test
 {
@@ -83,6 +84,18 @@ namespace Swashbuckle.AspNetCore.SwaggerGen.Test
             Assert.Equal(expectedFormat, schema.Format);
             Assert.NotNull(schema.Enum);
             Assert.Equal(expectedEnumCount, schema.Enum.Count);
+        }
+
+        [Fact]
+        public void GenerateSchema_DedupsEnumValues_IfEnumTypeWithDuplicateValues()
+        {
+            var schemaRepository = new SchemaRepository();
+
+            var referenceSchema = Subject().GenerateSchema(typeof(HttpStatusCode), schemaRepository);
+
+            Assert.NotNull(referenceSchema.Reference);
+            var schema = schemaRepository.Schemas[referenceSchema.Reference.Id];
+            Assert.Equal(schema.Enum.Cast<OpenApiInteger>().Select(v => v.Value).Distinct().Count(), schema.Enum.Count);
         }
 
         [Theory]
@@ -168,6 +181,7 @@ namespace Swashbuckle.AspNetCore.SwaggerGen.Test
 
             Assert.Equal("object", schema.Type);
             Assert.Empty(schema.Properties);
+            Assert.False(schema.AdditionalPropertiesAllowed);
         }
 
         [Theory]
@@ -189,6 +203,7 @@ namespace Swashbuckle.AspNetCore.SwaggerGen.Test
             var schema = schemaRepository.Schemas[expectedSchemaId];
             Assert.Equal("object", schema.Type);
             Assert.Equal(expectedProperties, schema.Properties.Keys);
+            Assert.False(schema.AdditionalPropertiesAllowed);
         }
 
         [Fact]
@@ -586,6 +601,17 @@ namespace Swashbuckle.AspNetCore.SwaggerGen.Test
             var schema = schemaRepository.Schemas[referenceSchema.Reference.Id];
             Assert.NotNull(schema.AdditionalProperties);
             Assert.Equal("object", schema.AdditionalProperties.Type);
+        }
+
+        [Theory]
+        [InlineData(typeof(JsonDocument))]
+        [InlineData(typeof(JsonElement))]
+        public void GenerateSchema_GeneratesEmptySchema_IfDynamicJsonType(Type type)
+        {
+            var schema = Subject().GenerateSchema(type, new SchemaRepository());
+
+            Assert.Null(schema.Reference);
+            Assert.Null(schema.Type);
         }
 
         private SchemaGenerator Subject(

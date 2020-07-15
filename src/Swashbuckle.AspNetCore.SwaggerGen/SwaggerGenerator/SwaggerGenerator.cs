@@ -48,9 +48,9 @@ namespace Swashbuckle.AspNetCore.SwaggerGen
                 Components = new OpenApiComponents
                 {
                     Schemas = schemaRepository.Schemas,
-                    SecuritySchemes = _options.SecuritySchemes
+                    SecuritySchemes = new Dictionary<string, OpenApiSecurityScheme>(_options.SecuritySchemes)
                 },
-                SecurityRequirements = _options.SecurityRequirements
+                SecurityRequirements = new List<OpenApiSecurityRequirement>(_options.SecurityRequirements)
             };
 
             var filterContext = new DocumentFilterContext(applicableApiDescriptions, _schemaGenerator, schemaRepository);
@@ -64,6 +64,11 @@ namespace Swashbuckle.AspNetCore.SwaggerGen
 
         private IList<OpenApiServer> GenerateServers(string host, string basePath)
         {
+            if (_options.Servers.Any())
+            {
+                return new List<OpenApiServer>(_options.Servers);
+            }
+
             return (host == null && basePath == null)
                 ? new List<OpenApiServer>()
                 : new List<OpenApiServer> { new OpenApiServer { Url = $"{host}{basePath}" } };
