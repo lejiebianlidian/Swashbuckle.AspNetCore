@@ -14,8 +14,9 @@ using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-#if NETCOREAPP3_0
-using IHostingEnvironment = Microsoft.AspNetCore.Hosting.IWebHostEnvironment;
+
+#if (NETSTANDARD2_0)
+using IWebHostEnvironment = Microsoft.AspNetCore.Hosting.IHostingEnvironment;
 #endif
 
 namespace Swashbuckle.AspNetCore.ReDoc
@@ -30,7 +31,7 @@ namespace Swashbuckle.AspNetCore.ReDoc
 
         public ReDocMiddleware(
             RequestDelegate next,
-            IHostingEnvironment hostingEnv,
+            IWebHostEnvironment hostingEnv,
             ILoggerFactory loggerFactory,
             ReDocOptions options)
         {
@@ -50,18 +51,18 @@ namespace Swashbuckle.AspNetCore.ReDoc
             var path = httpContext.Request.Path.Value;
 
             // If the RoutePrefix is requested (with or without trailing slash), redirect to index URL
-            if (httpMethod == "GET" && Regex.IsMatch(path, $"^/{_options.RoutePrefix}/?$"))
+            if (httpMethod == "GET" && Regex.IsMatch(path, $"^/?{Regex.Escape(_options.RoutePrefix)}/?$",  RegexOptions.IgnoreCase))
             {
                 // Use relative redirect to support proxy environments
-                var relativeRedirectPath = path.EndsWith("/")
+                var relativeIndexUrl = string.IsNullOrEmpty(path) || path.EndsWith("/")
                     ? "index.html"
                     : $"{path.Split('/').Last()}/index.html";
 
-                RespondWithRedirect(httpContext.Response, relativeRedirectPath);
+                RespondWithRedirect(httpContext.Response, relativeIndexUrl);
                 return;
             }
 
-            if (httpMethod == "GET" && Regex.IsMatch(path, $"/{_options.RoutePrefix}/?index.html"))
+            if (httpMethod == "GET" && Regex.IsMatch(path, $"/{_options.RoutePrefix}/?index.html",  RegexOptions.IgnoreCase))
             {
                 await RespondWithIndexHtml(httpContext.Response);
                 return;
@@ -72,7 +73,7 @@ namespace Swashbuckle.AspNetCore.ReDoc
 
         private StaticFileMiddleware CreateStaticFileMiddleware(
             RequestDelegate next,
-            IHostingEnvironment hostingEnv,
+            IWebHostEnvironment hostingEnv,
             ILoggerFactory loggerFactory,
             ReDocOptions options)
         {

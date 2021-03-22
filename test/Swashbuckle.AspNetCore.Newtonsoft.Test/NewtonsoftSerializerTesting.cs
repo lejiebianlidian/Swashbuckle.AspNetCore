@@ -1,6 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System.Collections.ObjectModel;
 using Newtonsoft.Json;
-using Swashbuckle.AspNetCore.TestSupport;
 using Xunit;
 
 namespace Swashbuckle.AspNetCore.Newtonsoft.Test
@@ -13,34 +12,33 @@ namespace Swashbuckle.AspNetCore.Newtonsoft.Test
         [Fact]
         public void Serialize()
         {
-            var dto = new Dictionary<IntEnum, string>
-            {
-                [IntEnum.Value2] = "foo",
-                [IntEnum.Value4] = "bar",
-                [IntEnum.Value8] = "blah",
-            };
+            var dto = new TestKeyedCollection();
+            dto.Add(new TestDto { Prop1 = "foo" });
+            dto.Add(new TestDto { Prop1 = "bar" });
 
-            var jsonString = JsonConvert.SerializeObject(dto);
-            Assert.Equal("{\"Value2\":\"foo\",\"Value4\":\"bar\",\"Value8\":\"blah\"}", jsonString);
+            var json = JsonConvert.SerializeObject(dto);
+
+            Assert.Equal("[{\"Prop1\":\"foo\"},{\"Prop1\":\"bar\"}]", json);
         }
 
         [Fact]
         public void Deserialize()
         {
             var dto = JsonConvert.DeserializeObject<TestDto>(
-                "{ \"jsonRequired\": \"foo\", \"jsonProperty\": null }");
-
-            Assert.Equal("foo", dto.jsonRequired);
-            Assert.Null(dto.jsonProperty);
+                "{ \"Prop1\": \"foo\" }");
         }
     }
 
     public class TestDto
     {
-        [JsonRequired]
-        public string jsonRequired;
+        public string Prop1 { get; set; }
+    }
 
-        [JsonProperty(Required = Required.AllowNull)]
-        public string jsonProperty;
+    public class TestKeyedCollection : KeyedCollection<string, TestDto>
+    {
+        protected override string GetKeyForItem(TestDto item)
+        {
+            return item.Prop1;
+        }
     }
 }

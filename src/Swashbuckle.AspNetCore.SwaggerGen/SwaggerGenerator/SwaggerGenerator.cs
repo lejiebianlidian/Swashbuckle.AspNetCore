@@ -38,7 +38,7 @@ namespace Swashbuckle.AspNetCore.SwaggerGen
                 .Where(apiDesc => !(_options.IgnoreObsoleteActions && apiDesc.CustomAttributes().OfType<ObsoleteAttribute>().Any()))
                 .Where(apiDesc => _options.DocInclusionPredicate(documentName, apiDesc));
 
-            var schemaRepository = new SchemaRepository();
+            var schemaRepository = new SchemaRepository(documentName);
 
             var swaggerDoc = new OpenApiDocument
             {
@@ -58,6 +58,8 @@ namespace Swashbuckle.AspNetCore.SwaggerGen
             {
                 filter.Apply(swaggerDoc, filterContext);
             }
+
+            swaggerDoc.Components.Schemas = new SortedDictionary<string, OpenApiSchema>(swaggerDoc.Components.Schemas);
 
             return swaggerDoc;
         }
@@ -108,13 +110,13 @@ namespace Swashbuckle.AspNetCore.SwaggerGen
                 var httpMethod = group.Key;
 
                 if (httpMethod == null)
-                    throw new NotSupportedException(string.Format(
+                    throw new SwaggerGeneratorException(string.Format(
                         "Ambiguous HTTP method for action - {0}. " +
                         "Actions require an explicit HttpMethod binding for Swagger/OpenAPI 3.0",
                         group.First().ActionDescriptor.DisplayName));
 
                 if (group.Count() > 1 && _options.ConflictingActionsResolver == null)
-                    throw new NotSupportedException(string.Format(
+                    throw new SwaggerGeneratorException(string.Format(
                         "Conflicting method/path combination \"{0} {1}\" for actions - {2}. " +
                         "Actions require a unique method/path combination for Swagger/OpenAPI 3.0. Use ConflictingActionsResolver as a workaround",
                         httpMethod,
@@ -131,24 +133,33 @@ namespace Swashbuckle.AspNetCore.SwaggerGen
 
         private OpenApiOperation GenerateOperation(ApiDescription apiDescription, SchemaRepository schemaRepository)
         {
-            var operation = new OpenApiOperation
+            try
             {
-                Tags = GenerateOperationTags(apiDescription),
-                OperationId = _options.OperationIdSelector(apiDescription),
-                Parameters = GenerateParameters(apiDescription, schemaRepository),
-                RequestBody = GenerateRequestBody(apiDescription, schemaRepository),
-                Responses = GenerateResponses(apiDescription, schemaRepository),
-                Deprecated = apiDescription.CustomAttributes().OfType<ObsoleteAttribute>().Any()
-            };
+                var operation = new OpenApiOperation
+                {
+                    Tags = GenerateOperationTags(apiDescription),
+                    OperationId = _options.OperationIdSelector(apiDescription),
+                    Parameters = GenerateParameters(apiDescription, schemaRepository),
+                    RequestBody = GenerateRequestBody(apiDescription, schemaRepository),
+                    Responses = GenerateResponses(apiDescription, schemaRepository),
+                    Deprecated = apiDescription.CustomAttributes().OfType<ObsoleteAttribute>().Any()
+                };
 
-            apiDescription.TryGetMethodInfo(out MethodInfo methodInfo);
-            var filterContext = new OperationFilterContext(apiDescription, _schemaGenerator, schemaRepository, methodInfo);
-            foreach (var filter in _options.OperationFilters)
-            {
-                filter.Apply(operation, filterContext);
+                apiDescription.TryGetMethodInfo(out MethodInfo methodInfo);
+                var filterContext = new OperationFilterContext(apiDescription, _schemaGenerator, schemaRepository, methodInfo);
+                foreach (var filter in _options.OperationFilters)
+                {
+                    filter.Apply(operation, filterContext);
+                }
+
+                return operation;
             }
-
-            return operation;
+            catch (Exception ex)
+            {
+                throw new SwaggerGeneratorException(
+                    message: $"Failed to generate Operation for action - {apiDescription.ActionDescriptor.DisplayName}. See inner exception",
+                    innerException: ex);
+            }
         }
 
         private IList<OpenApiTag> GenerateOperationTags(ApiDescription apiDescription)
@@ -189,7 +200,7 @@ namespace Swashbuckle.AspNetCore.SwaggerGen
                 || apiParameter.CustomAttributes().Any(attr => RequiredAttributeTypes.Contains(attr.GetType()));
 
             var schema = (apiParameter.ModelMetadata != null)
-                ? _schemaGenerator.GenerateSchema(
+                ? GenerateSchema(
                     apiParameter.ModelMetadata.ModelType,
                     schemaRepository,
                     apiParameter.PropertyInfo(),
@@ -217,6 +228,24 @@ namespace Swashbuckle.AspNetCore.SwaggerGen
             }
 
             return parameter;
+        }
+
+        private OpenApiSchema GenerateSchema(
+            Type type,
+            SchemaRepository schemaRepository,
+            PropertyInfo propertyInfo = null,
+            ParameterInfo parameterInfo = null)
+        {
+            try
+            {
+                return _schemaGenerator.GenerateSchema(type, schemaRepository, propertyInfo, parameterInfo);
+            }
+            catch (Exception ex)
+            {
+                throw new SwaggerGeneratorException(
+                    message: $"Failed to generate schema for type - {type}. See inner exception",
+                    innerException: ex);
+            }
         }
 
         private OpenApiRequestBody GenerateRequestBody(
@@ -273,7 +302,7 @@ namespace Swashbuckle.AspNetCore.SwaggerGen
 
             var isRequired = bodyParameter.CustomAttributes().Any(attr => RequiredAttributeTypes.Contains(attr.GetType()));
 
-            var schema = _schemaGenerator.GenerateSchema(
+            var schema = GenerateSchema(
                 bodyParameter.ModelMetadata.ModelType,
                 schemaRepository,
                 bodyParameter.PropertyInfo(),
@@ -351,7 +380,7 @@ namespace Swashbuckle.AspNetCore.SwaggerGen
                     : formParameter.Name;
 
                 var schema = (formParameter.ModelMetadata != null)
-                    ? _schemaGenerator.GenerateSchema(
+                    ? GenerateSchema(
                         formParameter.ModelMetadata.ModelType,
                         schemaRepository,
                         formParameter.PropertyInfo(),
@@ -434,7 +463,7 @@ namespace Swashbuckle.AspNetCore.SwaggerGen
         {
             return new OpenApiMediaType
             {
-                Schema = _schemaGenerator.GenerateSchema(modelMetadata.ModelType, schemaRespository)
+                Schema = GenerateSchema(modelMetadata.ModelType, schemaRespository)
             };
         }
 

@@ -1,23 +1,22 @@
 ﻿using System;
 using System.Globalization;
 using System.Linq;
-using System.Net.Http;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.OpenApi.Any;
-using Microsoft.OpenApi.Models;
 using Microsoft.OpenApi.Readers;
 using Xunit;
 using ReDocApp = ReDoc;
 
 namespace Swashbuckle.AspNetCore.IntegrationTests
 {
-    public class SwaggerGenIntegrationTests
+    public class SwaggerIntegrationTests
     {
         [Theory]
         [InlineData(typeof(Basic.Startup), "/swagger/v1/swagger.json")]
-        [InlineData(typeof(CliExample.Startup), "/api-docs/v1/swagger.json")]
-        //[InlineData(typeof(ConfigFromFile.Startup), "/swagger/v1/swagger.json")]
+        [InlineData(typeof(CliExample.Startup), "/swagger/v1/swagger.json")]
+        [InlineData(typeof(ConfigFromFile.Startup), "/swagger/v1/swagger.json")]
         [InlineData(typeof(CustomUIConfig.Startup), "/swagger/v1/swagger.json")]
         [InlineData(typeof(CustomUIIndex.Startup), "/swagger/v1/swagger.json")]
         [InlineData(typeof(GenericControllers.Startup), "/swagger/v1/swagger.json")]
@@ -25,8 +24,8 @@ namespace Swashbuckle.AspNetCore.IntegrationTests
         [InlineData(typeof(MultipleVersions.Startup), "/swagger/2.0/swagger.json")]
         //[InlineData(typeof(NetCore21.Startup), "/swagger/v1/swagger.json")]
         [InlineData(typeof(OAuth2Integration.Startup), "/resource-server/swagger/v1/swagger.json")]
-        [InlineData(typeof(ReDocApp.Startup), "/api-docs/v1/swagger.json")]
-        [InlineData(typeof(TestFirst.Startup), "/api-docs/v1-generated/openapi.json")]
+        [InlineData(typeof(ReDocApp.Startup), "/swagger/v1/swagger.json")]
+        [InlineData(typeof(TestFirst.Startup), "/swagger/v1-generated/openapi.json")]
         public async Task SwaggerEndpoint_ReturnsValidSwaggerJson(
             Type startupType,
             string swaggerRequestUri)
@@ -37,8 +36,34 @@ namespace Swashbuckle.AspNetCore.IntegrationTests
             var swaggerResponse = await client.GetAsync(swaggerRequestUri);
 
             swaggerResponse.EnsureSuccessStatusCode();
-            await AssertResponseDoesNotContainByteOrderMark(swaggerResponse);
-            await AssertValidSwaggerAsync(swaggerResponse);
+            var contentStream = await swaggerResponse.Content.ReadAsStreamAsync();
+            new OpenApiStreamReader().Read(contentStream, out OpenApiDiagnostic diagnostic);
+            Assert.Empty(diagnostic.Errors);
+        }
+
+        [Fact]
+        public async Task SwaggerEndpoint_ReturnsNotFound_IfUnknownSwaggerDocument()
+        {
+            var testSite = new TestSite(typeof(Basic.Startup));
+            var client = testSite.BuildClient();
+
+            var swaggerResponse = await client.GetAsync("/swagger/v2/swagger.json");
+
+            Assert.Equal(System.Net.HttpStatusCode.NotFound, swaggerResponse.StatusCode);
+        }
+
+        [Fact]
+        public async Task SwaggerEndpoint_DoesNotReturnByteOrderMark()
+        {
+            var testSite = new TestSite(typeof(Basic.Startup));
+            var client = testSite.BuildClient();
+
+            var swaggerResponse = await client.GetAsync("/swagger/v1/swagger.json");
+
+            swaggerResponse.EnsureSuccessStatusCode();
+            var contentBytes = await swaggerResponse.Content.ReadAsByteArrayAsync();
+            var bomBytes = Encoding.UTF8.GetPreamble();
+            Assert.NotEqual(bomBytes, contentBytes.Take(bomBytes.Length));
         }
 
         [Theory]
@@ -69,44 +94,23 @@ namespace Swashbuckle.AspNetCore.IntegrationTests
             }
         }
 
-        [Fact]
-        public async Task SwaggerEndpoint_ReturnsNotFound_IfUnknownSwaggerDocument()
+        [Theory]
+        [InlineData("/swagger/v1/swagger.json", "openapi", "3.0.1")]
+        [InlineData("/swagger/v1/swaggerv2.json", "swagger", "2.0")]
+        public async Task SwaggerMiddleware_CanBeConfiguredMultipleTimes(
+            string swaggerUrl,
+            string expectedVersionProperty,
+            string expectedVersionValue)
         {
-            var testSite = new TestSite(typeof(Basic.Startup));
-            var client = testSite.BuildClient();
+            var client = new TestSite(typeof(Basic.Startup)).BuildClient();
 
-            var swaggerResponse = await client.GetAsync("/swagger/v2/swagger.json");
+            var response = await client.GetAsync(swaggerUrl);
 
-            Assert.Equal(System.Net.HttpStatusCode.NotFound, swaggerResponse.StatusCode);
-        }
+            response.EnsureSuccessStatusCode();
+            var contentStream = await response.Content.ReadAsStreamAsync();
 
-        private async Task AssertResponseDoesNotContainByteOrderMark(HttpResponseMessage swaggerResponse)
-        {
-            var responseAsByteArray = await swaggerResponse.Content.ReadAsByteArrayAsync();
-            var bomByteArray = Encoding.UTF8.GetPreamble();
-
-            var byteIndex = 0;
-            var doesContainBom = true;
-            while (byteIndex < bomByteArray.Length && doesContainBom)
-            {
-                if (bomByteArray[byteIndex] != responseAsByteArray[byteIndex])
-                {
-                    doesContainBom = false;
-                }
-
-                byteIndex += 1;
-            }
-
-            Assert.False(doesContainBom);
-        }
-
-        private async Task AssertValidSwaggerAsync(HttpResponseMessage swaggerResponse)
-        {
-            var contentStream = await swaggerResponse.Content.ReadAsStreamAsync();
-
-            var openApiDocument = new OpenApiStreamReader().Read(contentStream, out OpenApiDiagnostic diagnostic);
-
-            Assert.Equal(Enumerable.Empty<OpenApiError>(), diagnostic.Errors);
+            var json = await JsonSerializer.DeserializeAsync<JsonElement>(contentStream);
+            Assert.Equal(expectedVersionValue, json.GetProperty(expectedVersionProperty).GetString());
         }
     }
 }

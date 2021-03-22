@@ -24,7 +24,7 @@ namespace NetCore21
             services.AddMvc()
                 .AddJsonOptions(c =>
                 {
-                    c.SerializerSettings.Converters.Add(new StringEnumConverter());
+                    c.SerializerSettings.Converters.Add(new StringEnumConverter(camelCaseText: true));
                     c.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
                 })
                 .SetCompatibilityVersion(CompatibilityVersion.Version_2_1);
@@ -33,7 +33,7 @@ namespace NetCore21
             {
                 c.SwaggerDoc("v1", new OpenApiInfo { Title = "Test API", Version = "1" });
 
-                c.UseInlineDefinitionsForEnums();
+                c.UseAllOfToExtendReferenceSchemas();
             });
             services.AddSwaggerGenNewtonsoftSupport();
         }
@@ -48,15 +48,9 @@ namespace NetCore21
 
             app.UseMvc();
 
-            app.UseSwagger(c =>
-            {
-                c.SerializeAsV2 = true;
-            });
+            app.UseSwagger();
 
-            app.UseSwaggerUI(c =>
-            {
-                c.SwaggerEndpoint("v1/swagger.json", "Test API (V1)");
-            });
+            app.UseSwaggerUI();
         }
     }
 }
